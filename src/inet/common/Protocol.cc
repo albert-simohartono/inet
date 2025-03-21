@@ -105,6 +105,7 @@ const Protocol Protocol::gpsr("gpsr", "GPSR");
 const Protocol Protocol::http("http", "HTTP");
 const Protocol Protocol::icmpv4("icmpv4", "ICMPv4", Protocol::NetworkLayer);
 const Protocol Protocol::icmpv6("icmpv6", "ICMPv6", Protocol::NetworkLayer);
+const Protocol Protocol::ieee80211be("ieee80211be", "Wi-Fi 7", Protocol::LinkLayer);
 const Protocol Protocol::ieee80211DsssPhy("ieee80211dsssphy", "IEEE 802.11 DSSS PHY", Protocol::PhysicalLayer);
 const Protocol Protocol::ieee80211ErpOfdmPhy("ieee80211erpofdmphy", "IEEE 802.11 ERP OFDM PHY", Protocol::PhysicalLayer);
 const Protocol Protocol::ieee80211FhssPhy("ieee80211fhssphy", "IEEE 802.11 FHSS PHY", Protocol::PhysicalLayer);

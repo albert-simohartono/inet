@@ -93,6 +93,7 @@ static const ProtocolGroup::Protocols ethertypeProtocols {
     { ETHERTYPE_IEEE8021AE, &Protocol::ieee8021ae },
     { ETHERTYPE_TTETH, &Protocol::tteth },
     { ETHERTYPE_IEEE8021_R_TAG, &Protocol::ieee8021rTag },
+    { Protocol::ieee80211be.getId(), &Protocol::ieee80211be },
 };
 
 // excerpt from http://www.iana.org/assignments/ppp-numbers/ppp-numbers.xhtml

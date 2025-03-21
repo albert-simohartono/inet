@@ -70,6 +70,7 @@ class INET_API Protocol
     static const Protocol http;
     static const Protocol icmpv4;
     static const Protocol icmpv6;
+    static const Protocol ieee80211be;
     static const Protocol ieee80211DsssPhy;
     static const Protocol ieee80211ErpOfdmPhy;
     static const Protocol ieee80211FhssPhy;
