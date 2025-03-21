@@ -31,6 +31,7 @@ class INET_API IRx
   public:
     virtual ~IRx() {}
 
+    virtual bool isFcsOk(Packet *packet) const = 0;
     virtual bool isReceptionInProgress() const = 0;
 
     // from Contention

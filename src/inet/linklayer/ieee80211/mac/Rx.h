@@ -42,7 +42,7 @@ class INET_API Rx : public cSimpleModule, public IRx
     virtual void initialize(int stage) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void setOrExtendNav(simtime_t navInterval);
-    virtual bool isFcsOk(Packet *packet) const;
+    virtual bool isFcsOk(Packet *packet) const override;
     virtual void recomputeMediumFree();
     virtual void refreshDisplay() const override;
 

@@ -134,7 +134,6 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     virtual void setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, const physicallayer::IIeee80211Mode *mode) const;
     virtual bool isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const;
-    virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
 
   protected:
     // IFrameSequenceHandler::ICallback
@@ -162,6 +161,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
   public:
     virtual ~Hcf();
 
+    virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
     // ICoordinationFunction
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
     virtual void processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;

@@ -119,10 +119,11 @@ class INET_API Dcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void processMgmtFrame(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader) override;
 
     virtual bool isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const;
-    virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
 
   public:
     virtual ~Dcf();
+
+    virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
 
     // ICoordinationFunction
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
