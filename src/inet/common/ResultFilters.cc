@@ -261,7 +261,7 @@ Register_ResultFilter("utilization", UtilizationFilter);
 void UtilizationFilter::init(Context *ctx)
 {
     cNumericResultFilter::init(ctx);
-    std::string fullPath = ctx->component->getFullPath() + "." + ctx->attrsProperty->getIndex() + ".throughput";
+    std::string fullPath = ctx->component->getFullPath() + "." + ctx->attrsProperty->getIndex() + ".utilization";
     cConfiguration *cfg = getEnvir()->getConfig();
     auto intervalValue = cfg->getPerObjectConfigValue(fullPath.c_str(), "interval");
     interval = cfg->parseDouble(intervalValue, "s", nullptr, 0.1);
@@ -269,6 +269,10 @@ void UtilizationFilter::init(Context *ctx)
     numValueLimit = cfg->parseLong(numValueLimitValue, nullptr, 100);
     lastSignalTime = totalValueTime = simTime();
     numValueLimit = numValueLimit * 2;
+
+    auto startTimeStr = cfg->getPerObjectConfigValue(fullPath.c_str(), "startTime");
+    startTime = startTimeStr ? SimTime::parse(startTimeStr) : 0.0;
+    // std::cout << "UtilizationFilter::init() fullPath: " << fullPath.c_str() << " | startTime: " << startTime << std::endl;
 }
 
 UtilizationFilter *UtilizationFilter::clone() const
@@ -283,6 +287,13 @@ bool UtilizationFilter::process(simtime_t& t, double& value, cObject *details)
 {
     ASSERT(value == 0 || value == 1);
     const simtime_t now = simTime();
+
+    if (now <= startTime) {
+        totalValueTime = now;
+        lastSignalTime = now;
+        return false;
+    }
+
     numValues++;
     ASSERT(numValues <= numValueLimit);
     if (numValueLimit > 0 && numValues == numValueLimit) {
@@ -331,6 +342,12 @@ void UtilizationFilter::updateTotalValue(simtime_t time)
 void UtilizationFilter::finish(cComponent *component, simsignal_t signal)
 {
     const simtime_t now = simTime();
+    if (now <= startTime)
+        return;  // Do nothing if sim time never exceeded 1s
+
+    if (lastSignalTime < startTime)
+        lastSignalTime = startTime;  // Ensure consistent start time
+
     if (lastSignalTime < now) {
         cObject *details = nullptr;
         if (lastSignalTime + interval < now) {
@@ -758,6 +775,10 @@ void ThroughputFilter::init(Context *ctx)
     auto numLengthLimitValue = cfg->getPerObjectConfigValue(fullPath.c_str(), "numLengthLimit");
     numLengthLimit = cfg->parseLong(numLengthLimitValue, nullptr, 100);
     lastSignalTime = simTime();
+
+    auto startTimeStr = cfg->getPerObjectConfigValue(fullPath.c_str(), "startTime");
+    startTime = startTimeStr ? SimTime::parse(startTimeStr) : 0.0;
+    // std::cout << "ThroughputFilter::init() fullPath: " << fullPath.c_str() << " | startTime: " << startTime << std::endl;
 }
 
 ThroughputFilter *ThroughputFilter::clone() const
@@ -765,6 +786,7 @@ ThroughputFilter *ThroughputFilter::clone() const
     auto clone = new ThroughputFilter();
     clone->interval = interval;
     clone->numLengthLimit = numLengthLimit;
+    clone->startTime = startTime;
     return clone;
 }
 
@@ -781,6 +803,12 @@ void ThroughputFilter::emitThroughput(simtime_t endInterval, cObject *details)
 void ThroughputFilter::receiveSignal(cResultFilter *prev, simtime_t_cref t, intval_t length, cObject *details)
 {
     const simtime_t now = simTime();
+
+    if (now <= startTime) {
+        lastSignalTime = now;
+        return;
+    }
+
     numLengths++;
     ASSERT(numLengthLimit == 0 || numLengths <= numLengthLimit);
     if (numLengthLimit > 0 && numLengths == numLengthLimit) {
@@ -814,6 +842,12 @@ void ThroughputFilter::receiveSignal(cResultFilter *prev, simtime_t_cref t, cObj
 void ThroughputFilter::finish(cComponent *component, simsignal_t signalID)
 {
     const simtime_t now = simTime();
+    if (now <= startTime)
+        return;  // Do nothing if sim time never exceeded 1s
+
+    if (lastSignalTime < startTime)
+        lastSignalTime = startTime;  // Ensure consistent start time
+
     if (lastSignalTime < now) {
         cObject *details = nullptr;
         if (lastSignalTime + interval < now) {
@@ -868,7 +902,7 @@ void LiveThroughputFilter::receiveSignal(cResultFilter *prev, simtime_t_cref t, 
 void LiveThroughputFilter::receiveSignal(cResultFilter *prev, simtime_t_cref t, cObject *object, cObject *details)
 {
     if (auto packet = dynamic_cast<cPacket *>(object))
-        receiveSignal(prev, t, packet->getByteLength(), details);
+        receiveSignal(prev, t, packet->getBitLength(), details);
 }
 
 void LiveThroughputFilter::timerExpired()

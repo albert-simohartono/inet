@@ -375,6 +375,7 @@ class INET_API UtilizationFilter : public cNumericResultFilter
     simtime_t interval = 0.1;
     int numValueLimit = 200; // two values (1/0) per packet to match the result of the throughput filter
     bool emitIntermediateValues = true;
+    simtime_t startTime = 0.0;
 
     // state
     simtime_t lastSignalTime;
@@ -442,6 +443,7 @@ class INET_API ThroughputFilter : public cObjectResultFilter
     simtime_t interval = -1;
     int numLengthLimit = -1;
     bool emitIntermediateZeros = true;
+    simtime_t startTime = 0.0;
 
     simtime_t lastSignalTime;
     double totalLength = 0;
