@@ -77,6 +77,16 @@ module Radio extends PhysicalLayerBase like IRadio
         @statistic[receptionState](title="Radio reception state"; source=receptionStateChanged; record=count,vector; interpolationmode=sample-hold);
         @statistic[transmissionState](title="Radio transmission state"; source=transmissionStateChanged; record=count,vector; interpolationmode=sample-hold);
 
+        @statistic[utilization](title="utilization"; unit=%; 
+                                source=100 * utilization((count(transmissionStarted) - count(transmissionEnded)) + (count(receptionStarted) - count(receptionEnded))); 
+                                record=vector,histogram,mean; interpolationmode=linear);
+        @statistic[utilizationTx](title="utilization"; unit=%; source=100 * utilization(count(transmissionStarted) - count(transmissionEnded)); record=vector,histogram,mean; interpolationmode=linear);
+        @statistic[utilizationRx](title="utilization"; unit=%; source=100 * utilization(count(receptionStarted) - count(receptionEnded)); record=vector,histogram,mean; interpolationmode=linear);
+
+        // @statistic[countRxStart](title="countRxStart"; source=count(receptionStarted); record=vector; interpolationmode=none);
+        // @statistic[countRxEnd](title="countRxEnd"; source=count(receptionEnded); record=vector; interpolationmode=none);
+        // @statistic[countRxDiff](title="countRxDiff"; source=(count(receptionStarted) - count(receptionEnded)); record=vector; interpolationmode=none);
+
         @statistic[minSnir](title="Min SNIR"; source=minimumSnir(packetSentToUpper); record=histogram);
         @statistic[packetErrorRate](title="Packet error rate"; source=packetErrorRate(packetSentToUpper); record=histogram);
         @statistic[bitErrorRate](title="Bit error rate"; source=bitErrorRate(packetSentToUpper); record=histogram);
