@@ -19,6 +19,7 @@ void FrameSequenceHandler::handleStartRxTimeout()
     auto lastStep = context->getLastStep();
     switch (lastStep->getType()) {
         case IFrameSequenceStep::Type::RECEIVE:
+            EV_DETAIL << "Timeout while waiting in RX step. Aborting current frame sequence..." << endl;
             abortFrameSequence();
             break;
         case IFrameSequenceStep::Type::TRANSMIT:
@@ -68,8 +69,13 @@ void FrameSequenceHandler::startFrameSequence(IFrameSequence *frameSequence, Fra
         frameSequence->startSequence(context, 0);
         startFrameSequenceStep();
     }
-    else
-        throw cRuntimeError("Channel access granted while a frame sequence is running");
+    else {
+        // throw cRuntimeError("Channel access granted while a frame sequence is running");
+        // This might happen in high shadowing channel, where packet / ack get lost and STA & AP sequence become out of sync
+        EV_WARN   << "Channel access granted while a frame sequence is running, aborting current frame sequence..." << endl;
+        std::cout << "Channel access granted while a frame sequence is running, aborting current frame sequence..." << std::endl;
+        abortFrameSequence();
+    }
 }
 
 void FrameSequenceHandler::startFrameSequenceStep()
@@ -95,6 +101,7 @@ void FrameSequenceHandler::startFrameSequenceStep()
                 // start reception timer, break loop if timer expires before reception is over
                 auto receiveStep = static_cast<IReceiveStep *>(nextStep);
                 callback->scheduleStartRxTimer(receiveStep->getTimeout());
+                EV_INFO << "Start reception timer " << receiveStep->getTimeout() << endl;
                 break;
             }
             default:
