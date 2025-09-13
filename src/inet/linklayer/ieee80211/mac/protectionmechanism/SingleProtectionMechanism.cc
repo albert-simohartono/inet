@@ -89,80 +89,90 @@ simtime_t SingleProtectionMechanism::computeBlockAckDurationField(const Ptr<cons
 }
 
 //
-// For management frames, non-QoS data frames (i.e., with bit 7 of the Frame Control field equal
-// to 0), and individually addressed data frames with the Ack Policy subfield equal to Normal Ack
-// only, the Duration/ID field is set to one of the following:
-//
-//  i) If the frame is the final fragment of the TXOP, the estimated time required for the
-//     transmission of one ACK frame (including appropriate IFS values)
-//  ii) Otherwise, the estimated time required for the transmission of one ACK frame, plus the
-//      time required for the transmission of the following MPDU and its response if required,
-//      plus applicable IFS durations.
-//
-// For individually addressed QoS data frames with the Ack Policy subfield equal to No Ack or
-// Block Ack, for management frames of subtype Action No Ack, and for group addressed
-// frames, the Duration/ID field is set to one of the following:
-//
-//  i) If the frame is the final fragment of the TXOP, 0
-//  ii) Otherwise, the estimated time required for the transmission of the following frame and its
-//      response frame, if required (including appropriate IFS values)
+// IEEE Std 802.11-2024 Section 9.2.5.2 
+// "Setting for single and multiple protection under enhanced distributed channel access (EDCA)"
+// 
+// 8) In Management frames, non-QoS Data frames (i.e., with bit 7 of the Frame Control field equal to 0), 
+//    and individually addressed Data frames with an ack policy other than No Ack or Block Ack, 
+//    the Duration/ID field is set to one of the following: 
+//  i)  If the frame is the final frame of the TXOP, 
+//      the estimated time required for the transmission of one Ack or BlockAck frame, as appropriate
+//      (including appropriate IFSs)
+//  ii) Otherwise, 
+//      the estimated time required for the transmission of one Ack or BlockAck frame, as appropriate
+//      plus the time required for the transmission of the following frame and its response if required, 
+//      plus applicable IFSs.
+// 
+// 9) In individually addressed QoS Data frames with an ack policy of No Ack or Block Ack, 
+//    for Action No Ack frames, and for group addressed frames, 
+//    the Duration/ID field is set to one of the following:
+//  i)  If the frame is the final frame of the TXOP, 0 
+//  ii) Otherwise, 
+//      the estimated time required for the transmission of the following frame
+//      and its response frame, if required (including appropriate IFSs)
 //
 simtime_t SingleProtectionMechanism::computeDataOrMgmtFrameDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy)
 {
-    bool mgmtFrame = false;
-    bool mgmtFrameWithNoAck = false;
+    auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader);
+    AckPolicy ackPolicyValue = dataHeader ? dataHeader->getAckPolicy() : AckPolicy::NORMAL_ACK;
+    bool noAckOrBlockAck = (ackPolicyValue == AckPolicy::NO_ACK || ackPolicyValue == AckPolicy::BLOCK_ACK);
+
+    bool dataFrame = dataHeader != nullptr;
+    bool mgmtFrame = dynamicPtrCast<const Ieee80211MgmtHeader>(dataOrMgmtHeader) != nullptr;
+    bool hasPendingFrame = pendingHeader != nullptr;
+
     bool groupAddressed = dataOrMgmtHeader->getReceiverAddress().isMulticast();
-    if (dynamicPtrCast<const Ieee80211MgmtHeader>(dataOrMgmtHeader)) {
-        mgmtFrame = true;
-        mgmtFrameWithNoAck = false; // FIXME ack policy?
-    }
-    bool nonQoSData = dataOrMgmtHeader->getType() == ST_DATA;
-    bool individuallyAddressedDataWithNormalAck = false;
-    bool individuallyAddressedDataWithNoAckOrBlockAck = false;
-    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader)) {
-        individuallyAddressedDataWithNormalAck = !groupAddressed && dataHeader->getAckPolicy() == AckPolicy::NORMAL_ACK;
-        individuallyAddressedDataWithNoAckOrBlockAck = !groupAddressed && (dataHeader->getAckPolicy() == AckPolicy::NO_ACK || dataHeader->getAckPolicy() == AckPolicy::BLOCK_ACK);
-    }
-    if (mgmtFrame || nonQoSData || individuallyAddressedDataWithNormalAck) {
+    bool individuallyAddressed = !groupAddressed;
+
+    bool nonQoSData     = dataOrMgmtHeader->getType() == ST_DATA;
+    bool qoSData        = dataOrMgmtHeader->getType() == ST_DATA_WITH_QOS;
+    bool actionNoAck    = dataOrMgmtHeader->getType() == ST_NOACKACTION;
+
+    simtime_t currentFrameDuration = rateSelection->computeMode(packet, dataOrMgmtHeader, txop)->getDuration(packet->getDataLength());
+
+    if (mgmtFrame || nonQoSData || (individuallyAddressed && dataFrame && (!noAckOrBlockAck))) {
         simtime_t ackFrameDuration = rateSelection->computeResponseAckFrameMode(packet, dataOrMgmtHeader)->getDuration(LENGTH_ACK);
-        if (txop->isFinalFragment(dataOrMgmtHeader)) {
+        simtime_t duration = ackFrameDuration + modeSet->getSifsTime();
+
+        if (hasPendingFrame)
+            duration += computePendingFrameDuration(pendingPacket, pendingHeader, txop, ackPolicy);
+
+        if (txop->isFinalFrame(currentFrameDuration + duration, hasPendingFrame))
             return ackFrameDuration + modeSet->getSifsTime();
-        }
-        else {
-            simtime_t ackFrameDuration = rateSelection->computeResponseAckFrameMode(packet, dataOrMgmtHeader)->getDuration(LENGTH_ACK);
-            simtime_t duration = ackFrameDuration + modeSet->getSifsTime();
-            if (pendingHeader) {
-                auto pendingFrameMode = rateSelection->computeMode(pendingPacket, pendingHeader, txop);
-                simtime_t pendingFrameDuration = pendingFrameMode->getDuration(pendingPacket->getDataLength());
-                duration += pendingFrameDuration + modeSet->getSifsTime();
-                if (ackPolicy->isAckNeeded(pendingHeader)) {
-                    RateSelection::setFrameMode(pendingPacket, pendingHeader, pendingFrameMode); // KLUDGE
-                    simtime_t ackToPendingFrameDuration = rateSelection->computeResponseAckFrameMode(pendingPacket, pendingHeader)->getDuration(LENGTH_ACK);
-                    duration += ackToPendingFrameDuration + modeSet->getSifsTime();
-                }
-            }
+        else 
             return duration;
-        }
     }
-    if (individuallyAddressedDataWithNoAckOrBlockAck || mgmtFrameWithNoAck || groupAddressed) {
-        if (txop->isFinalFragment(dataOrMgmtHeader))
+
+    if ((individuallyAddressed && qoSData && noAckOrBlockAck) || actionNoAck || groupAddressed) {
+        simtime_t duration = 0;
+
+        if (hasPendingFrame)
+            duration = computePendingFrameDuration(pendingPacket, pendingHeader, txop, ackPolicy);
+
+        if (txop->isFinalFrame(currentFrameDuration + duration, hasPendingFrame))
             return 0;
-        else {
-            simtime_t duration = 0;
-            if (pendingHeader) {
-                auto pendingFrameMode = rateSelection->computeMode(pendingPacket, pendingHeader, txop);
-                simtime_t pendingFrameDuration = pendingFrameMode->getDuration(pendingPacket->getDataLength());
-                duration = pendingFrameDuration + modeSet->getSifsTime();
-                if (ackPolicy->isAckNeeded(pendingHeader)) {
-                    RateSelection::setFrameMode(pendingPacket, pendingHeader, pendingFrameMode); // KLUDGE
-                    simtime_t ackToPendingFrameDuration = rateSelection->computeResponseAckFrameMode(pendingPacket, pendingHeader)->getDuration(LENGTH_ACK);
-                    duration += ackToPendingFrameDuration + modeSet->getSifsTime();
-                }
-            }
+        else
             return duration;
-        }
     }
+
     throw cRuntimeError("Unknown frame");
+}
+
+simtime_t SingleProtectionMechanism::computePendingFrameDuration(Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy) const
+{
+    simtime_t duration = 0;
+    auto pendingFrameMode = rateSelection->computeMode(pendingPacket, pendingHeader, txop);
+    simtime_t pendingFrameDuration = pendingFrameMode->getDuration(pendingPacket->getDataLength());
+
+    duration += pendingFrameDuration + modeSet->getSifsTime();
+
+    if (ackPolicy->isAckNeeded(pendingHeader)) {
+        RateSelection::setFrameMode(pendingPacket, pendingHeader, pendingFrameMode); // KLUDGE
+        simtime_t ackToPendingFrameDuration = rateSelection->computeResponseAckFrameMode(pendingPacket, pendingHeader)->getDuration(LENGTH_ACK);
+        duration += ackToPendingFrameDuration + modeSet->getSifsTime();
+    }
+
+    return duration;
 }
 
 simtime_t SingleProtectionMechanism::computeDurationField(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy)

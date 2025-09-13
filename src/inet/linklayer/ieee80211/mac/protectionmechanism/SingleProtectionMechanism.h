@@ -39,6 +39,7 @@ class INET_API SingleProtectionMechanism : public ModeSetListener
     virtual simtime_t computeBlockAckReqDurationField(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq);
     virtual simtime_t computeBlockAckDurationField(const Ptr<const Ieee80211BlockAck>& blockAck);
     virtual simtime_t computeDataOrMgmtFrameDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader, Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy);
+    virtual simtime_t computePendingFrameDuration(Packet *pendingPacket, const Ptr<const Ieee80211DataOrMgmtHeader>& pendingHeader, TxopProcedure *txop, IRecipientQosAckPolicy *ackPolicy) const;
 
   public:
     virtual ~SingleProtectionMechanism() {}
