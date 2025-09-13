@@ -52,6 +52,7 @@ class INET_API TxopProcedure : public ModeSetListener
     virtual simtime_t getDuration() const;
 
     virtual bool isFinalFragment(const Ptr<const Ieee80211MacHeader>& header) const;
+    virtual bool isFinalFrame(const simtime_t totalDurationNeeded, bool hasPendingFrame) const;
     virtual bool isTxopInitiator(const Ptr<const Ieee80211MacHeader>& header) const;
     virtual bool isTxopTerminator(const Ptr<const Ieee80211MacHeader>& header) const;
 

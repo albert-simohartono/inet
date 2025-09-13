@@ -11,6 +11,8 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HrDsssMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ErpOfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 
 namespace inet {
@@ -33,22 +35,35 @@ void TxopProcedure::initialize(int stage)
     }
 }
 
+//
+// IEEE 802.11-2016 Table 9-137 "Default EDCA Parameter Set element parameter values if dot11OCBActivated is false"
+//
 s TxopProcedure::getTxopLimit(const IIeee80211Mode *mode, AccessCategory ac)
 {
+    bool isDsss = dynamic_cast<const Ieee80211DsssMode *>(mode)     || dynamic_cast<const Ieee80211HrDsssMode *>(mode);
+    bool isOfdm = dynamic_cast<const Ieee80211VhtMode *>(mode)      || dynamic_cast<const Ieee80211HtMode *>(mode)  ||
+                  dynamic_cast<const Ieee80211ErpOfdmMode *>(mode)  || dynamic_cast<const Ieee80211OfdmMode *>(mode);
+
     switch (ac) {
-        case AC_BK: return s(0);
-        case AC_BE: return s(0);
+        case AC_BK:
+        case AC_BE:
+            if (isDsss) return ms(3.264);
+            if (isOfdm) return ms(2.528);
+            break;
         case AC_VI:
-            if (dynamic_cast<const Ieee80211DsssMode *>(mode) || dynamic_cast<const Ieee80211HrDsssMode *>(mode)) return ms(6.016);
-            else if (dynamic_cast<const Ieee80211HtMode *>(mode) || dynamic_cast<const Ieee80211OfdmMode *>(mode)) return ms(3.008);
-            else return s(0);
+            if (isDsss) return ms(6.016);
+            if (isOfdm) return ms(4.096);
+            break;
         case AC_VO:
-            if (dynamic_cast<const Ieee80211DsssMode *>(mode) || dynamic_cast<const Ieee80211HrDsssMode *>(mode)) return ms(3.264);
-            else if (dynamic_cast<const Ieee80211HtMode *>(mode) || dynamic_cast<const Ieee80211OfdmMode *>(mode)) return ms(1.504);
-            else return s(0);
-        default: throw cRuntimeError("Unknown access category = %d", ac);
+            if (isDsss) return ms(3.264);
+            if (isOfdm) return ms(2.080);
+            break;
+        default:
+            throw cRuntimeError("Unknown access category = %d", ac);
     }
+    return s(0);
 }
+
 
 TxopProcedure::ProtectionMechanism TxopProcedure::selectProtectionMechanism(AccessCategory ac) const
 {
@@ -72,6 +87,7 @@ void TxopProcedure::startTxop(AccessCategory ac)
         throw cRuntimeError("Txop is already running");
     if (limit == -1) {
         auto referenceMode = modeSet->getSlowestMandatoryMode();
+        EV_DETAIL << "TxopProcedure::startTxop() AC: " << ac << " | modeSet: " << modeSet->getName() << endl;
         limit = getTxopLimit(referenceMode, ac).get();
     }
     // The STA selects between single and multiple protection when it transmits the first frame of a TXOP.
@@ -96,7 +112,7 @@ simtime_t TxopProcedure::getRemaining() const
     if (start == -1)
         throw cRuntimeError("Txop has not started yet");
     auto now = simTime();
-    return now > start + limit ? 0 : now - start;
+    return now >= start + limit ? 0 : (start + limit - now);
 }
 
 simtime_t TxopProcedure::getDuration() const
@@ -106,10 +122,44 @@ simtime_t TxopProcedure::getDuration() const
     return simTime() - start;
 }
 
-// FIXME implement!
+// FIXME check if there is enough remaining TXOP time to send another frame
+// if remainingTime < (currentDataDuration + SIFS + currentAckDuration + SIFS + optional RTS-SIFS-CTS-SIFS + nextDataDuration + SIFS + nextAckDuration)
 bool TxopProcedure::isFinalFragment(const Ptr<const Ieee80211MacHeader>& header) const
 {
-    return false;
+    if (start == -1)
+        throw cRuntimeError("Txop has not started yet");
+    EV_DETAIL << "TXOP elapsed time: " << getDuration() * 1000 << " ms | remaining time: " << getRemaining() * 1000 << " ms" << endl;
+    if (limit == 0) {
+        EV_DETAIL << "TXOP: Only permitted to send one frame fragment" << endl;
+        return true;
+    }
+    else if (!header->getMoreFragments()) {
+        EV_DETAIL << "TXOP: This is the final (or whole) fragment of the current frame" << endl;
+        return true;
+    }
+    else {
+        EV_DETAIL << "TXOP: This is NOT the final fragment" << endl;
+        return false;
+    }
+}
+
+bool TxopProcedure::isFinalFrame(const simtime_t totalDurationNeeded, bool hasPendingFrame) const
+{
+    if (start == -1)
+        throw cRuntimeError("TXOP has not started yet");
+    
+    EV_DETAIL << "TXOP elapsed time: " << getDuration() * 1000 << " ms | remaining time: " << getRemaining() * 1000 << " ms" << endl;
+
+    if (limit == 0) {
+        EV_DETAIL << "TXOP: Only permitted to send one frame" << endl;
+        return true;
+    }
+    if (!hasPendingFrame) {
+        EV_DETAIL << "TXOP: No pending frame, considered final frame" << endl;
+        return true;
+    }
+
+    return getRemaining() < totalDurationNeeded;
 }
 
 // FIXME implement!
