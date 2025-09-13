@@ -489,6 +489,7 @@ void Radio::abortReception(cMessage *timer)
     auto part = (IRadioSignal::SignalPart)timer->getKind();
     auto reception = signal->getReception();
     EV_INFO << "Reception \x1b[1maborted\x1b[0m: for " << (IWirelessSignal *)signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
+    emit(receptionEndedSignal, check_and_cast<const cObject *>(reception));
     if (timer == receptionTimer)
         receptionTimer = nullptr;
     updateTransceiverState();
