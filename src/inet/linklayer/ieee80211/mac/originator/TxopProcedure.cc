@@ -122,27 +122,6 @@ simtime_t TxopProcedure::getDuration() const
     return simTime() - start;
 }
 
-// FIXME check if there is enough remaining TXOP time to send another frame
-// if remainingTime < (currentDataDuration + SIFS + currentAckDuration + SIFS + optional RTS-SIFS-CTS-SIFS + nextDataDuration + SIFS + nextAckDuration)
-bool TxopProcedure::isFinalFragment(const Ptr<const Ieee80211MacHeader>& header) const
-{
-    if (start == -1)
-        throw cRuntimeError("Txop has not started yet");
-    EV_DETAIL << "TXOP elapsed time: " << getDuration() * 1000 << " ms | remaining time: " << getRemaining() * 1000 << " ms" << endl;
-    if (limit == 0) {
-        EV_DETAIL << "TXOP: Only permitted to send one frame fragment" << endl;
-        return true;
-    }
-    else if (!header->getMoreFragments()) {
-        EV_DETAIL << "TXOP: This is the final (or whole) fragment of the current frame" << endl;
-        return true;
-    }
-    else {
-        EV_DETAIL << "TXOP: This is NOT the final fragment" << endl;
-        return false;
-    }
-}
-
 bool TxopProcedure::isFinalFrame(const simtime_t totalDurationNeeded, bool hasPendingFrame) const
 {
     if (start == -1)
